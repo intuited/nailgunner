@@ -13,6 +13,7 @@ function nailgunner_help {
         required) help_required;;
         overridable) help_overridable;;
         optional) help_optional;;
+        *) help_topics;;
     esac;
 }
 
@@ -22,13 +23,14 @@ Usage:
     nailgunner [-i] COMMAND [ARGS]
 
 Options:
-    -i:     Use interactive mode via rlwrap or jline.
+    -i:     Use INTERACTIVE mode via rlwrap or jline.
 
 COMMANDs:
-    load:   Loads a new nailgun server.
-    fire:   Launches a nailgun client to an existing server;
-              returns 1 on failed connection.
     shoot:  Launches a client, starting a server if needed.
+    load:   Loads a new nailgun server.  Called by \`nailgunner shoot\`.
+    fire:   Launches a nailgun client to an existing server;
+              returns $NAILGUN_CONNECT_FAILED on failed connection.
+            Also called by \`nailgunner shoot\`.
     help:   Get more information on the \`nailgunner\` client.
 
 Any additional arguments are passed to the client invocation
@@ -39,6 +41,7 @@ EOF
 function help_topics {
     cat <<EOF
 nailgunner help TOPIC
+
 TOPICs:
     general:      General usage information
     required:     Required environment variables
@@ -47,82 +50,209 @@ TOPICs:
 EOF
 }
 
-# Environment variable triage
 
-? logging parameters?
+# Required options and help for them
 
 function help_required {
-    cat << EOF
-Required environment variables:
-    BOOTCLASSPATH: the first entry in the classpath
-    CLASSPATH: the classpath to be used by the nailgun server
+    local action;
+    for action in $@; do
+        help_${action}_required;
+    done;
+}
+function _nailgunner_init_required {
+    local action;
+    for action in $@; do
+        _nailgunner_${action}_init_required || return $?;
+    done;
+}
 
-    JAVA_MAIN: the main class to be executed by nailgun
+function help_load_required {
+    cat << EOF
+Required server environment variables:
 
     NAILGUN_CLASSPATH: the classpath to nailgun's classes
 
-    NAILGUN_CLIENT: path/filename to the compiled nailgun client executable
 EOF
 }
-REQUIRED=( BOOTCLASSPATH CLASSPATH JAVA_MAIN NAILGUN_CLASSPATH NAILGUN_CLIENT );
-for env_var in ${REQUIRED[@]}; do
-    [[ ${!env_var} ]] || {
-        echo "Required environment variable $env_var not supplied.";
-        exit 1;
-    } > &2;
-done;
+function _nailgunner_load_init_required {
+    _nailgunner_env_require NAILGUN_CLASSPATH;
+}
 
+function help_fire_required {
+    cat << EOF
+Required client environment variables:
+
+    NAILGUN_CLIENT: path/filename to the compiled nailgun client executable
+
+EOF
+}
+function _nailgunner_fire_init_required {
+    _nailgunner_env_require NAILGUN_CLIENT;
+}
+
+
+# Overridable environment variable help and init
 
 function help_overridable {
+    local action;
+    for action in $@; do
+        help_${action}_overridable;
+    done;
+}
+function help_load_overridable {
     cat << EOF
-Overridable environment variables (those with default values):
-    NAILGUN_MAIN:    the Java class which serves as an entry point
-                       for the nailgun server
+Overridable server environment variables (those with default values):
 
-    JLINE_CLASS:     If readline is not found, and JLINE_CLASSPATH is given,
-                       interactive clients will use this class
-                       instead of JAVA_MAIN.
+    NAILGUN_MAIN:      The Java class which serves as an entry point
+                         for the nailgun server.
+                       Defaults to com.martiansoftware.nailgun.NGServer
 
     NAILGUN_INTERFACE: The interface on which the nailgun server will listen.
                        Defaults to 127.0.0.1
+
 EOF
 }
-NAILGUN_MAIN="${NAILGUN_MAIN:-com.martiansoftware.nailgun.NGServer}";
-JLINE_CLASS="${JLINE_CLASS:-jline.ConsoleRunner}";
-NAILGUN_INTERFACE=${NAILGUN_INTERFACE:-127.0.0.1};
+function help_fire_overridable {
+    cat << EOF
+Overridable client environment variables:
+
+    JLINE_CLASS:     If readline is not found, and JLINE_CLASSPATH is given,
+                       INTERACTIVE clients will use this as the entry point.
+                     By default, the class jline.ConsoleRunner will be used.
+
+EOF
+}
+
+function _nailgunner_init_overridable {
+    local action;
+    for action in $@; do
+        _nailgunner_${action}_init_overridable || return $?;
+    done;
+}
+function _nailgunner_load_init_overridable {
+    NAILGUN_MAIN="${NAILGUN_MAIN:-com.martiansoftware.nailgun.NGServer}";
+}
+
+function _nailgunner_fire_init_overridable {
+    JLINE_CLASS="${JLINE_CLASS:-jline.ConsoleRunner}";
+    NAILGUN_INTERFACE=${NAILGUN_INTERFACE:-127.0.0.1};
+}
+
+
+# Optional environment variable help and init
 
 function help_optional {
     cat <<EOF
-Optional environment variables:
+Environment variables optional for both the client and server:
+
+    NAILGUN_PORT: The port which will be used by the server and the client.
+                  If not given, \`nailgun\` will use its default port (2113).
+
+    NAILGUN_RETRY_PAUSE: The delay between retries
+                           to connect to a newly started server
+    NAILGUN_RETRIES:     The number of attempts to connect
+                           to a newly started server
+
+EOF
+    local action;
+    for action in $@; do
+        help_${action}_optional;
+    done;
+}
+function help_load_optional {
+    true;
+}
+function help_fire_optional {
+    cat <<EOF
+Optional client environment variables:
+
+    BOOTCLASSPATH: the first entry in the classpath
+    CLASSPATH: the classpath to be used by the nailgun server
+
     RLWRAP: If given, this command will be prepended to client command lines.
             If \`-i\` is specified, and this is not given,
               and \`rlwrap\` is found in the path, \`rlwrap\` will be used.
     RLWRAP_COMMAND:  If given, the rlwrap command will be
                        \`\$RLWRAP -C \$RLWRAP_COMMAND\`.
                      This will determine the readline history filename.
-    NAILGUN_RETRY_PAUSE: The delay between retries
-                           to connect to a newly started server
-    NAILGUN_RETRIES:     The number of attempts to connect
-                           to a newly started server
-
-    NAILGUN_PORT: The port which will be used by the server and the client.
-                  If not given, \`nailgun\` will use its default port (2113).
 
     JLINE_CLASSPATH: The classpath to a jar containing jline.
                      Required in order to use it.
+
+    JAVA_MAIN: The main class to be executed by nailgun.
+               If not given, the first command line argument will be used.
+
 EOF
 }
+
+function _nailgunner_init_action {
+    local action;
+    for action in $@; do
+        _nailgunner_init_${action}_action;
+    done;
+}
+function _nailgunner_init_load_action {
+    SERVER_OUT=$(mktemp) || return 1;
+    SERVER_ERR=$(mktemp) || return 1;
+
+    function nailgunner_load {
+        java $JAVA_OPTS $NARWHAL_JAVA_ARGUMENTS -cp "$NAILGUN_CLASSPATH:$BOOTCLASSPATH:$CLASSPATH" "$NAILGUN_MAIN" $NAILGUN_PORT > "$SERVER_OUT" 2>"$SERVER_ERR"
+    }
+}
+function _nailgunner_init_fire_action {
+    # Build the client launch function
+
+    if [[ $INTERACTIVE ]]; then
+        if _nailgunner_use_rlwrap; then
+            function nailgunner_fire {
+                $NAILGUNNER_RLWRAP "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
+            };
+        else
+            function nailgunner_fire {
+                "$NAILGUN_CLIENT" $JLINE_CLASS $JAVA_MAIN "$@"
+            };
+        fi;
+    else
+        function nailgunner_fire {
+            "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
+        };
+    fi;
+}
+
+function _nailgunner_init {
+    _nailgunner_init_required "$@"    || { help_required "$@"    && return 10; }
+    _nailgunner_init_overridable "$@" || { help_overridable "$@" && return 11; }
+    _nailgunner_init_action "$@";
+}
+
+# TODO: ? maybe add logging capabilities?
+
 
 # Constants
 NAILGUN_CONNECT_FAILED=230;
 
+
 # Utility functions
+
 function _nailgunner_join_classpaths {
     local IFS=:;
     echo "$*";
 }
 
+function _nailgunner_env_require {
+    for env_var in $@; do
+        [[ ${!env_var} ]] || {
+            echo "Required environment variable $env_var not supplied.";
+            echo;
+            help_required >&2;
+            return 1;
+        } >&2;
+    done;
+}
+
+
 # Logic
+
 function _nailgunner_find_rlwrap {
     [[ $RLWRAP ]] && echo "$RLWRAP" && return;
 
@@ -135,7 +265,7 @@ function _nailgunner_find_rlwrap {
 }
 
 function _nailgunner_use_rlwrap {
-    [[ $interactive ]] && _nailgunner_find_rlwrap;
+    [[ $INTERACTIVE ]] && _nailgunner_find_rlwrap;
 }
 
 function _nailgunner_has_jline {
@@ -143,41 +273,26 @@ function _nailgunner_has_jline {
 }
 
 function _nailgunner_use_jline {
-    [[ $interactive ]] && ! _nailgunner_use_rlwrap \
+    [[ $INTERACTIVE ]] && ! _nailgunner_use_rlwrap \
         && _nailgunner_has_jline;
 }
     
 
-# Build the client launch function
-if [[ $interactive ]]; then
-    if _nailgunner_use_rlwrap; then
-        function nailgunner_fire {
-            $NAILGUNNER_RLWRAP "$NAILGUN_CLIENT" "$JAVA_MAIN" \
-                -version "$NARWHAL_JS_VERSION" -f "$BOOTSTRAP" -f -
-        };
-    else
-        function nailgunner_fire {
-            "$NAILGUN_CLIENT" $JLINE_CLASS "$JAVA_MAIN" \
-                -version "$NARWHAL_JS_VERSION" -f "$BOOTSTRAP" -f -
-        };
-    fi;
-else
-    function nailgunner_fire {
-        "$NAILGUN_CLIENT" "$JAVA_MAIN" -version "$NARWHAL_JS_VERSION" "$BOOTSTRAP" "$0" "$@"
-    };
-fi;
-
 # Ensure that the running nailgun has all necessary classes
 function nailgunner_check_ammo {
-    # TODO: check to see if it's okay to add a duplicate classpath entry
+    # TODO: Check to see if it's okay to add a duplicate classpath entry
     #         with `ng-cp`.
+    #       The idea here is to add any classpath elements
+    #         that are not already loaded into the nailgun.
+    #       This is sort of complicated because it means that
+    #         the first client connection needs to invoke `ng-cp`.
+    #       Probably this will involve calling this function
+    #         from both nailgunner_shoot and nailgunner_fire.
+    #       That's complicated because it means refactoring nailgunner_fire
+    #         into a subsidiary function.
     true;
 }
 
-
-function nailgunner_load {
-    java $JAVA_OPTS $NARWHAL_JAVA_ARGUMENTS -cp "$NAILGUN_CLASSPATH:$BOOTCLASSPATH:$CLASSPATH" "$NAILGUN_MAIN" $NAILGUN_PORT > "$server_out" 2>"$server_err"
-}
 
 function nailgunner_shoot {
     # Connects a client, launching the server if necessary.
@@ -196,8 +311,6 @@ function nailgunner_shoot {
     #   by avoiding repeated connection retries to the failed server.
     trap "let child_death_count += 1" SIGCHLD
     echo "Launching nailgun server..." >&2
-    server_out=$(mktemp)
-    server_err=$(mktemp)
     nailgunner_load &
 
     while (( $child_death_count == 0 )) && (( $more_retries > 0 )); do
@@ -226,20 +339,22 @@ function nailgunner_shoot {
     fi
 
     echo "Output:"
-    cat "$server_out" | sed 's/^/    /'
+    cat "$SERVER_OUT" | sed 's/^/    /'
     echo "Error:"
-    cat "$server_err" | sed 's/^/    /'
-    rm "$server_out" "$server_err"
+    cat "$SERVER_ERR" | sed 's/^/    /'
+    rm "$SERVER_OUT" "$SERVER_ERR"
     return 1
 }
 
 
 function route {
-    case "${0##/}" in
-        fire) nailgunner_fire "$@";;
-        load) nailgunner_load "$@";;
-        shoot) nailgunner_shoot "$@";;
-        help) nailgunner_help "$@";;
+    [[ $1 == -i ]] && INTERACTIVE=1 && shift;
+    ACTION=$1; shift;
+    case $ACTION in
+        help)  nailgunner_help "$@";;
+        fire)  _nailgunner_init fire && nailgunner_fire "$@";;
+        load)  _nailgunner_init load && nailgunner_load "$@";;
+        shoot) _nailgunner_init fire load && nailgunner_shoot "$@";;
         *) help_general;;
     esac;
 }
