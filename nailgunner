@@ -114,7 +114,7 @@ EOF
 }
 
 # Constants
-NAILGUN_CONNECTION_REFUSED=230;
+NAILGUN_CONNECT_FAILED=230;
 
 # Utility functions
 function _nailgunner_join_classpaths {
@@ -183,10 +183,9 @@ function nailgunner_shoot {
     # Connects a client, launching the server if necessary.
 
     # First try to connect to an existing server instance
-    # TODO: check to see if a nail can return a non-zero value
     nailgunner_fire "$@";
     local ret=$?;
-    (( $ret != $NAILGUN_CONNECTION_REFUSED )) && return $?;
+    (( $ret != $NAILGUN_CONNECT_FAILED )) && return $?;
 
     declare -i child_death_count=0
     declare -i more_retries=$NAILGUN_RETRIES
@@ -210,7 +209,7 @@ function nailgunner_shoot {
         #         in a language that doesn't need temp files for this.
         nailgunner_fire "$@";
         local ret=$?;
-        (( $ret != $NAILGUN_CONNECTION_REFUSED )) && return $?;
+        (( $ret != $NAILGUN_CONNECT_FAILED )) && return $?;
         # Mourn the death of the fired nail
         let child_death_count -= 1;
         let more_retries -= 1;
