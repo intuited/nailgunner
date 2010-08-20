@@ -269,9 +269,9 @@ function _nailgunner_find_rlwrap {
     RLWRAP="$(which rlwrap)";
     if [ -x "$RLWRAP" ]; then
         [[ $RLWRAP_COMMAND ]] && RLWRAP="$RLWRAP -C $RLWRAP_COMMAND";
-        return true;
+        return;
     fi;
-    return false;
+    false;
 }
 
 function _nailgunner_use_rlwrap {
