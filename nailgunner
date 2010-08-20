@@ -218,9 +218,15 @@ function _nailgunner_init_fire_action {
                 $NAILGUNNER_RLWRAP "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
             };
         else
-            function nailgunner_fire {
-                "$NAILGUN_CLIENT" $JLINE_CLASS $JAVA_MAIN "$@"
-            };
+            if [[ $JLINE_CLASSPATH ]]; then
+                function nailgunner_fire {
+                    "$NAILGUN_CLIENT" $JLINE_CLASS $JAVA_MAIN "$@"
+                };
+            else
+                function nailgunner_fire {
+                    "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
+                };
+            fi;
         fi;
     else
         function nailgunner_fire {
