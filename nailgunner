@@ -94,6 +94,17 @@ function _nailgunner_fire_init_required {
 # Overridable environment variable help and init
 
 function help_overridable {
+    cat << EOF
+Overridable environment variable controlling the server and client interface:
+
+    NAILGUN_RETRY_PAUSE: The delay between retries
+                           to connect to a newly started server
+                         Defaults to 1 second.
+    NAILGUN_RETRIES:     The number of attempts to connect
+                           to a newly started server
+                         Defaults to 10.
+
+EOF
     local action;
     for action in $@; do
         help_${action}_overridable;
@@ -124,6 +135,9 @@ EOF
 }
 
 function _nailgunner_init_overridable {
+    NAILGUN_RETRY_PAUSE=${NAILGUN_RETRY_PAUSE:-1};
+    NAILGUN_RETRIES=${NAILGUN_RETRIES:-10};
+
     local action;
     for action in $@; do
         _nailgunner_${action}_init_overridable || return $?;
@@ -147,11 +161,6 @@ Environment variables optional for both the client and server:
 
     NAILGUN_PORT: The port which will be used by the server and the client.
                   If not given, \`nailgun\` will use its default port (2113).
-
-    NAILGUN_RETRY_PAUSE: The delay between retries
-                           to connect to a newly started server
-    NAILGUN_RETRIES:     The number of attempts to connect
-                           to a newly started server
 
 EOF
     local action;
@@ -196,7 +205,8 @@ function _nailgunner_init_load_action {
     SERVER_ERR=$(mktemp) || return 1;
 
     function nailgunner_load {
-        java $JAVA_OPTS $NARWHAL_JAVA_ARGUMENTS -cp "$NAILGUN_CLASSPATH:$BOOTCLASSPATH:$CLASSPATH" "$NAILGUN_MAIN" $NAILGUN_PORT > "$SERVER_OUT" 2>"$SERVER_ERR"
+        local classpath="$(_nailgunner_join_classpaths "$NAILGUN_CLASSPATH" "$BOOTCLASSPATH" "$CLASSPATH")";
+        java $JAVA_OPTS $NARWHAL_JAVA_ARGUMENTS -cp "$classpath" "$NAILGUN_MAIN" $NAILGUN_PORT > "$SERVER_OUT" 2>"$SERVER_ERR"
     }
 }
 function _nailgunner_init_fire_action {
@@ -302,18 +312,18 @@ function nailgunner_shoot {
     local ret=$?;
     (( $ret != $NAILGUN_CONNECT_FAILED )) && return $?;
 
-    declare -i child_death_count=0
     declare -i more_retries=$NAILGUN_RETRIES
 
     # Discover if the server has terminated early.
     # This is not really necessary but will save some time
     #   in cases of server failure
     #   by avoiding repeated connection retries to the failed server.
-    trap "let child_death_count += 1" SIGCHLD
+    unset NAILGUNNER_SERVER_DIED;
+    trap "NAILGUNNER_SERVER_DIED=1" SIGCHLD
     echo "Launching nailgun server..." >&2
     nailgunner_load &
 
-    while (( $child_death_count == 0 )) && (( $more_retries > 0 )); do
+    while (( $more_retries > 0 )) && ! [[ $NAILGUNNER_SERVER_DIED ]]; do
         # TODO: Figure out a way to clean up the temp files
         #         after the server completes.
         #       I think these files can actually be rm'd right away,
@@ -323,16 +333,14 @@ function nailgunner_shoot {
         nailgunner_fire "$@";
         local ret=$?;
         (( $ret != $NAILGUN_CONNECT_FAILED )) && return $?;
-        # Mourn the death of the fired nail
-        let child_death_count -= 1;
-        let more_retries -= 1;
-        sleep NAILGUN_RETRY_PAUSE;
+        let more_retries-=1;
+        sleep $NAILGUN_RETRY_PAUSE;
     done
 
     trap SIGCHLD;
 
     # Post-mortem
-    if (( $child_death_count )); then
+    if (( $NAILGUNNER_SERVER_DIED )); then
         echo "Nailgun server terminated early."
     else
         echo "Failed to connect to nailgun server."
