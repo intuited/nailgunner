@@ -358,8 +358,8 @@ function nailgunner_shoot {
     #   in cases of server failure
     #   by avoiding repeated connection retries to the failed server.
     unset NAILGUNNER_SERVER_DIED;
-    trap "NAILGUNNER_SERVER_DIED=1" SIGCHLD
-    echo "Launching nailgun server..." >&2
+    trap "NAILGUNNER_SERVER_DIED=1" SIGCHLD;
+    echo "Launching nailgun server..." >&2;
     nailgunner_load &
 
     while (( $more_retries > 0 )) && ! [[ $NAILGUNNER_SERVER_DIED ]]; do
