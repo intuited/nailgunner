@@ -162,6 +162,9 @@ Environment variables optional for both the client and server:
     NAILGUN_PORT: The port which will be used by the server and the client.
                   If not given, \`nailgun\` will use its default port (2113).
 
+    NAILGUNNER_DEBUG:  If this environment variable exists,
+                         nailgunner will emit trace information.
+
 EOF
     local action;
     for action in $@; do
@@ -205,7 +208,19 @@ function _nailgunner_init_load_action {
     SERVER_ERR=$(mktemp) || return 1;
 
     function nailgunner_load {
+        nailgunner_debug $'nailgunner_load';
+        nailgunner_debug "    NAILGUN_CLASSPATH: $NAILGUN_CLASSPATH";
+        nailgunner_debug "    BOOTCLASSPATH: $BOOTCLASSPATH";
+        nailgunner_debug "    CLASSPATH: $CLASSPATH";
         local classpath="$(_nailgunner_join_classpaths "$NAILGUN_CLASSPATH" "$BOOTCLASSPATH" "$CLASSPATH")";
+        nailgunner_debug "    classpath: $classpath";
+        nailgunner_debug "    JAVA_OPTS: $JAVA_OPTS";
+        nailgunner_debug "    NARWHAL_JAVA_ARGUMENTS: $NARWHAL_JAVA_ARGUMENTS";
+        nailgunner_debug "    NAILGUN_MAIN: $NAILGUN_MAIN";
+        nailgunner_debug "    NAILGUN_PORT: $NAILGUN_PORT";
+        nailgunner_debug "    SERVER_OUT: $SERVER_OUT";
+        nailgunner_debug "    SERVER_ERR: $SERVER_ERR";
+        nailgunner_debug '-> ' java $JAVA_OPTS $NARWHAL_JAVA_ARGUMENTS -cp "$classpath" "$NAILGUN_MAIN" $NAILGUN_PORT > "$SERVER_OUT" 2>"$SERVER_ERR"
         java $JAVA_OPTS $NARWHAL_JAVA_ARGUMENTS -cp "$classpath" "$NAILGUN_MAIN" $NAILGUN_PORT > "$SERVER_OUT" 2>"$SERVER_ERR"
     }
 }
@@ -215,21 +230,39 @@ function _nailgunner_init_fire_action {
     if [[ $INTERACTIVE ]]; then
         if _nailgunner_use_rlwrap; then
             function nailgunner_fire {
+                nailgunner_debug $'nailgunner_fire form 1';
+                nailgunner_debug "    NAILGUNNER_RLWRAP: $NAILGUNNER_RLWRAP";
+                nailgunner_debug "    NAILGUN_CLIENT: $NAILGUN_CLIENT";
+                nailgunner_debug "    JAVA_MAIN: $JAVA_MAIN";
+                nailgunner_debug '-> ' $NAILGUNNER_RLWRAP "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
                 $NAILGUNNER_RLWRAP "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
             };
         else
             if [[ $JLINE_CLASSPATH ]]; then
                 function nailgunner_fire {
+                    nailgunner_debug $'nailgunner_fire form 2';
+                    nailgunner_debug "    NAILGUN_CLIENT: $NAILGUN_CLIENT";
+                    nailgunner_debug "    JLINE_CLASS: $JLINE_CLASS";
+                    nailgunner_debug "    JAVA_MAIN: $JAVA_MAIN";
+                    nailgunner_debug '-> ' "$NAILGUN_CLIENT" $JLINE_CLASS $JAVA_MAIN "$@"
                     "$NAILGUN_CLIENT" $JLINE_CLASS $JAVA_MAIN "$@"
                 };
             else
                 function nailgunner_fire {
+                    nailgunner_debug $'nailgunner_fire form 3';
+                    nailgunner_debug "    NAILGUN_CLIENT: $NAILGUN_CLIENT";
+                    nailgunner_debug "    JAVA_MAIN: $JAVA_MAIN";
+                    nailgunner_debug '-> ' "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
                     "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
                 };
             fi;
         fi;
     else
         function nailgunner_fire {
+            nailgunner_debug $'nailgunner_fire form 4';
+            nailgunner_debug "    NAILGUN_CLIENT: $NAILGUN_CLIENT";
+            nailgunner_debug "    JAVA_MAIN: $JAVA_MAIN";
+            nailgunner_debug '-> ' "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
             "$NAILGUN_CLIENT" $JAVA_MAIN "$@"
         };
     fi;
@@ -371,6 +404,12 @@ function route {
         shoot) _nailgunner_init fire load && nailgunner_shoot "$@";;
         *) help_general;;
     esac;
+}
+
+function nailgunner_debug {
+    if [[ $NAILGUNNER_DEBUG ]]; then
+        echo "$@";
+    fi;
 }
 
 route "$@"
